@@ -149,8 +149,8 @@ def add_follow(follow_id):
         flash("Access unauthorized.", "danger")
         return redirect("/")
 
-    followed_user = User.query.get_or_404(follow_id)
-    g.user.following.append(followed_user)
+    followed = User.query.get_or_404(follow_id)
+    g.user.following.append(followed)
     db.session.commit()
 
     return redirect(f"/users/{g.user.id}/following")
@@ -163,12 +163,11 @@ def stop_following(follow_id):
         flash("Access unauthorized.", "danger")
         return redirect("/")
 
-    followed_user = User.query.get(follow_id)
-    g.user.following.remove(followed_user)
+    followed = User.query.get(follow_id)
+    g.user.following.remove(followed)
     db.session.commit()
 
     return redirect(f"/users/{g.user.id}/following")
-
 
 @app.route('/users/profile', methods=["GET", "POST"])
 def profile():
@@ -184,8 +183,8 @@ def profile():
             if User.authenticate(user.username, form.password.data):
                 user.username = form.username.data
                 user.email = form.email.data
-                user.image_url = form.image_url.data
-                user.header_image_url = form.header_image_url.data
+                user.image_url = form.image_url.data or "/static/images/default-pic.png"
+                user.header_image_url = form.header_image_url.data or "/static/images/warbler-hero.jpg"
                 user.bio = form.bio.data
                 db.session.commit()
                 return redirect(f"/users/{user.id}")
@@ -203,8 +202,6 @@ def delete_user():
 
     db.session.delete(g.user)
     db.session.commit()
-    return redirect("/signup")
-
 
 ############################################################################
 # Messages routes:
@@ -228,7 +225,7 @@ def messages_add():
 @app.route('/messages/<int:message_id>', methods=["GET"])
 def messages_show(message_id):
     """Show a message."""
-    msg = Message.query.get(message_id)
+    msg = Message.query.get_or_404(message_id)
     return render_template('messages/show.html', message=msg)
 
 
@@ -254,15 +251,21 @@ def homepage():
         - logged in: 100 most recent messages of followed_users
     """
     if g.user:
+        following = [fllwing.id for fllwing in g.user.following] + [g.user.id]
         messages = (Message
-                    .query
+                    .query.filter(Message.user_id.in_(following))
                     .order_by(Message.timestamp.desc())
                     .limit(100)
                     .all())
-        return render_template('home.html', messages=messages)
+        liked = [msg.id for msg in g.user.likes]
+        return render_template('home.html', messages=messages, likes=liked)
     else:
         return render_template('home-anon.html')
 
+@app.errorhandler(404)
+def err(e):
+    """render 404 page"""
+    return render_template('404.html'), 404
 
 ##############################################################################
 # Turn off all caching in Flask
